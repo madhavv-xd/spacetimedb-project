@@ -1,0 +1,10 @@
+# Ignore backend and database source code on Vercel
+/server
+/spacetimedb
+
+# Ignore other non-frontend files
+AGENTS.md
+CLAUDE.md
+deployment_guide.md
+spacetime.json
+spacetime.local.json
