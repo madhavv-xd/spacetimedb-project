@@ -1,12 +1,16 @@
 'use client';
 
 import { useState, useEffect, useRef } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { tables, reducers } from "../src/module_bindings";
 import { useTable, useReducer } from "spacetimedb/react";
 
 export default function Home() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
   const [text, setText] = useState('');
-  const [username, setUsername] = useState('');
   const [usernameSet, setUsernameSet] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -14,59 +18,50 @@ export default function Home() {
   const sendMessage = useReducer(reducers.sendMessage);
   const setUsernameReducer = useReducer(reducers.setUsername);
 
+  // Redirect to /login if not authenticated
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.replace('/login');
+    }
+  }, [status, router]);
+
+  // Once authenticated, register the Google name as the SpacetimeDB username
+  useEffect(() => {
+    if (session?.user?.name && !usernameSet) {
+      setUsernameReducer({ username: session.user.name });
+      setUsernameSet(true);
+    }
+  }, [session, usernameSet, setUsernameReducer]);
+
+  // Auto-scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSetUsername = () => {
-    if (!username.trim()) return;
-    setUsernameReducer({ username });
-    setUsernameSet(true);
-  };
-
   const handleSend = () => {
-    if (!text.trim()) return;
-    sendMessage({ text, sender: username });
+    if (!text.trim() || !session?.user?.name) return;
+    sendMessage({ text, sender: session.user.name });
     setText('');
   };
 
-  if (!usernameSet) {
+  // Loading / redirecting state
+  if (status === 'loading' || status === 'unauthenticated') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-indigo-500 via-purple-500 to-pink-500 p-4">
-        <div className="w-full max-w-md bg-white/10 backdrop-blur-lg rounded-2xl p-8 shadow-2xl border border-white/20">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-black text-white tracking-tight mb-2">ChatX</h1>
-            <p className="text-white/80">Connect instantly with anyone, anywhere.</p>
-          </div>
-          <div className="space-y-4">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Pick a username"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSetUsername()}
-                className="w-full bg-white/20 border border-white/30 rounded-xl px-4 py-3 text-white placeholder-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/50 transition-all"
-              />
-            </div>
-            <button
-              onClick={handleSetUsername}
-              className="w-full bg-white text-indigo-600 font-bold py-3 rounded-xl hover:bg-indigo-50 transform hover:scale-105 transition-all active:scale-95 shadow-lg"
-            >
-              Enter Chat
-            </button>
-          </div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500">
+        <div className="w-10 h-10 border-4 border-white/30 border-t-white rounded-full animate-spin" />
       </div>
     );
   }
+
+  const username = session!.user!.name ?? 'Anonymous';
+  const avatar = session!.user!.image;
 
   return (
     <div className="flex flex-col h-screen bg-zinc-50 dark:bg-zinc-950 font-sans">
       {/* Header */}
       <header className="h-16 flex items-center justify-between px-6 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 shadow-sm">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-linear-to-tr from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold">X</div>
+          <div className="w-8 h-8 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold">X</div>
           <h1 className="text-xl font-bold text-zinc-900 dark:text-white">ChatX</h1>
         </div>
         <div className="flex items-center gap-3">
@@ -76,6 +71,29 @@ export default function Home() {
               <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Online
             </span>
           </div>
+          {/* Avatar */}
+          {avatar ? (
+            <img
+              src={avatar}
+              alt={username}
+              className="w-9 h-9 rounded-full border-2 border-indigo-300 shadow-sm"
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
+              {username.charAt(0).toUpperCase()}
+            </div>
+          )}
+          {/* Sign out */}
+          <button
+            id="signout-btn"
+            onClick={() => signOut({ callbackUrl: '/login' })}
+            title="Sign out"
+            className="ml-1 text-zinc-400 hover:text-red-500 transition-colors"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1" />
+            </svg>
+          </button>
         </div>
       </header>
 
@@ -99,8 +117,8 @@ export default function Home() {
                     </span>
                   )}
                   <div className={`px-4 py-2 rounded-2xl shadow-sm ${
-                    isMe 
-                      ? 'bg-linear-to-r from-indigo-600 to-purple-600 text-white rounded-tr-none' 
+                    isMe
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-tr-none'
                       : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-700 rounded-tl-none'
                   }`}>
                     <p className="text-[15px] leading-relaxed break-words">{msg.text}</p>
@@ -125,9 +143,10 @@ export default function Home() {
             value={text}
             onChange={e => setText(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleSend()}
-            className="flex-1 bg-zinc-100 dark:bg-zinc-800 border-none rounded-xl px-4 py-3 text-zinc-900 dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all outline-hidden"
+            className="flex-1 bg-zinc-100 dark:bg-zinc-800 border-none rounded-xl px-4 py-3 text-zinc-900 dark:text-white focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
           />
           <button
+            id="send-btn"
             onClick={handleSend}
             disabled={!text.trim()}
             className="bg-indigo-600 text-white p-3 rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md transform active:scale-95"

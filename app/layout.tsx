@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { SpacetimeProvider } from "./providers/spacetime";
+import { AuthProvider } from "./providers/session";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,9 +19,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <SpacetimeProvider>
-          {children}
-        </SpacetimeProvider>
+        <AuthProvider>
+          <SpacetimeProvider>
+            {children}
+          </SpacetimeProvider>
+        </AuthProvider>
       </body>
     </html>
   );
